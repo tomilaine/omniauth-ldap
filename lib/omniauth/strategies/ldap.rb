@@ -24,6 +24,8 @@ module OmniAuth
       option :method, :plain
       option :uid, 'sAMAccountName'
       option :name_proc, lambda {|n| n}
+      option :group_query, nil
+      option :group_attribute, 'cn'
 
       def request_phase
         OmniAuth::LDAP::Adaptor.validate @options
@@ -42,6 +44,9 @@ module OmniAuth
           @ldap_user_info = @adaptor.bind_as(:filter => filter(@adaptor), :size => 1, :password => request['password'])
           return fail!(:invalid_credentials) if !@ldap_user_info
 
+          # execute groups query
+          @groups = group_query(@adaptor, @ldap_user_info)
+
           @user_info = self.class.map_user(@options[:mapping], @ldap_user_info)
           super
         rescue Exception => e
@@ -49,7 +54,17 @@ module OmniAuth
         end
       end
 
-      def filter adaptor
+      def group_query(adaptor, ldap_user_info)
+        return nil unless adaptor.group_query and !adaptor.group_query.empty?
+
+        uid = ldap_user_info[@options[:uid].intern].first
+        dn = ldap_user_info[:dn].first
+        groups = adaptor.search(filter: adaptor.group_query % {username: Net::LDAP::Filter.escape(uid), dn: Net::LDAP::Filter.escape(dn)})
+        groups.collect!{|g|g[options[:group_attribute].intern].first}
+        return groups
+      end
+
+      def filter(adaptor)
         if adaptor.filter and !adaptor.filter.empty?
           username = Net::LDAP::Filter.escape(@options[:name_proc].call(request['username']))
           Net::LDAP::Filter.construct(adaptor.filter % { username: username })
@@ -65,7 +80,9 @@ module OmniAuth
         @user_info
       }
       extra {
-        { :raw_info => @ldap_user_info }
+        ex = { :raw_info => @ldap_user_info }
+        ex[:groups] = @groups if @groups
+        ex
       }
 
       def self.map_user(mapper, object)

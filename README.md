@@ -10,17 +10,19 @@ Use the LDAP strategy as a middleware in your application:
         :port => 389,
         :method => :plain,
         :base => 'dc=intridea, dc=com',
-        :name_proc => Proc.new {|name| name.gsub(/@.*$/,'')},
-        :bind_dn => 'default_bind_dn',
-        :password => 'password',
         :uid => 'sAMAccountName',
         # Or, alternatively:
         #:filter => '(&(uid=%{username})(memberOf=cn=myapp-users,ou=groups,dc=example,dc=com))'
+        :name_proc => Proc.new {|name| name.gsub(/@.*$/,'')},
+        :bind_dn => 'default_bind_dn',
+        :password => 'password',
         :mapping => {
           'name' => 'cn;lang-en',
           'email' => ['preferredEmail', 'mail'],
           'nickname' => ['uid', 'userid', 'sAMAccountName']
         }
+        :group_query => '(&(objectClass=posixGroup)(memberUid=%{username}))'
+        :group_attribute => 'cn'
 
 All of the listed options are required, with the exception of :title, :name_proc, :bind_dn, :password, and :mapping.
 Allowed values of :method are: :plain, :ssl, :tls.
@@ -50,6 +52,15 @@ Allowed values of :method are: :plain, :ssl, :tls.
 
 :mapping allows you to customize mapping of LDAP attributes to the returned user info hash. The default mappings are
   defined in [ldap.rb](lib/omniauth/strategies/ldap.rb#L7), it will be merged with yours.
+
+:group_query will perform an additional search on the LDAP server after a user has successfully
+  authenticated, and add information about their group membership to the auth object returned by
+  Omniauth under the extra/groups key. %{username} will be replaced with the value of the field specified
+  by uid. %{dn} will be replaced by the dn of the authenticated user. If using this option, you must
+  also specify group_attribute. Set group_query to nil or false to disable this additional query.
+
+:group_attribute is the LDAP attribute to extract from the entries returned by group_query. This
+  will be added to the auth object returned by Omniauth under the extra/groups key.
 
 Direct users to '/auth/ldap' to have them authenticated via your company's LDAP server.
 
