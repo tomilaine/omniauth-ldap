@@ -90,9 +90,9 @@ module OmniAuth
         mapper.each do |key, value|
           case value
           when String
-            user[key] = object[value.downcase.to_sym].first if object.respond_to? value.downcase.to_sym
+            user[key] = force_utf8(object[value.downcase.to_sym].first) if object.respond_to? value.downcase.to_sym
           when Array
-            value.each {|v| (user[key] = object[v.downcase.to_sym].first; break;) if object.respond_to? v.downcase.to_sym}
+            value.each {|v| (user[key] = force_utf8(object[v.downcase.to_sym].first); break;) if object.respond_to? v.downcase.to_sym}
           when Hash
             value.map do |key1, value1|
               pattern = key1.dup
@@ -100,11 +100,19 @@ module OmniAuth
                 part = ''; v.collect(&:downcase).collect(&:to_sym).each {|v1| (part = object[v1].first; break;) if object.respond_to? v1}
                 pattern.gsub!("%#{i}",part||'')
               end
-              user[key] = pattern
+              user[key] = force_utf8(pattern)
             end
           end
         end
         user
+      end
+
+      # This is due to a bug in Net::LDAP
+      # https://github.com/ruby-ldap/ruby-net-ldap/pull/242 might fix this
+      # but updating Net::LDAP requires dropping support for <2.0 Ruby.
+      def self.force_utf8(orig_string)
+        string = orig_string.dup.force_encoding('UTF-8')
+        string.valid_encoding? ? string : orig_string
       end
 
       protected
